@@ -1,15 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import {
-  Container,
-  Col,
-  Form,
-  Button,
-  Card,
-  Row
-} from 'react-bootstrap';
-
+import { Container, Col, Form, Button, Card, Row } from 'react-bootstrap';
+import{ useMutation } from '@apollo/client';
+import { SAVE_BOOK } from '../utils/mutations';
+import { searchGoogleBooks } from '../utils/googleApi';
 import Auth from '../utils/auth';
-import { saveBook, searchGoogleBooks } from '../utils/API';
 import { saveBookIds, getSavedBookIds } from '../utils/localStorage';
 
 const SearchBooks = () => {
@@ -20,44 +14,48 @@ const SearchBooks = () => {
 
   // create state to hold saved bookId values
   const [savedBookIds, setSavedBookIds] = useState(getSavedBookIds());
+  const [saveBook, { error }] = useMutation(SAVE_BOOK);
 
-  // set up useEffect hook to save `savedBookIds` list to localStorage on component unmount
-  // learn more here: https://reactjs.org/docs/hooks-effect.html#effects-with-cleanup
+  // set up useEffect hook to save `savedBookIds` list to localStorage
   useEffect(() => {
     return () => saveBookIds(savedBookIds);
   });
 
-  // create method to search for books and set state on form submit
-  const handleFormSubmit = async (event) => {
-    event.preventDefault();
+  // Method to search for books and set state on form submit
+const handleFormSubmit = async (event) => {
+  event.preventDefault();
 
-    if (!searchInput) {
-      return false;
+  if (!searchInput) {
+    return false; // If the search input is empty, return early and do nothing
+  }
+
+  try {
+    // Search Google Books API for the search input
+    const response = await searchGoogleBooks(searchInput);
+
+    if (!response.ok) {
+      throw new Error('something went wrong!');
     }
 
-    try {
-      const response = await searchGoogleBooks(searchInput);
+    // Parse the JSON response and extract the array of books from the 'items' property
+    const { items } = await response.json();
 
-      if (!response.ok) {
-        throw new Error('something went wrong!');
-      }
+    // Map the array of books to the bookData format
+    const bookData = items.map((book) => ({
+      bookId: book.id,
+      authors: book.volumeInfo.authors || ['No author to display'],
+      title: book.volumeInfo.title,
+      description: book.volumeInfo.description,
+      image: book.volumeInfo.imageLinks?.thumbnail || '',
+    }));
 
-      const { items } = await response.json();
-
-      const bookData = items.map((book) => ({
-        bookId: book.id,
-        authors: book.volumeInfo.authors || ['No author to display'],
-        title: book.volumeInfo.title,
-        description: book.volumeInfo.description,
-        image: book.volumeInfo.imageLinks?.thumbnail || '',
-      }));
-
-      setSearchedBooks(bookData);
-      setSearchInput('');
-    } catch (err) {
-      console.error(err);
-    }
-  };
+    // Set the state with the search results and reset the search input field
+    setSearchedBooks(bookData);
+    setSearchInput('');
+  } catch (err) {
+    console.error(err);
+  }
+};
 
   // create function to handle saving a book to our database
   const handleSaveBook = async (bookId) => {
@@ -72,13 +70,10 @@ const SearchBooks = () => {
     }
 
     try {
-      const response = await saveBook(bookToSave, token);
-
-      if (!response.ok) {
-        throw new Error('something went wrong!');
-      }
-
-      // if book successfully saves to user's account, save book id to state
+      const { data } = await saveBook({
+        variables: { bookData: { ...bookToSave } },
+      });
+      console.log(savedBookIds);
       setSavedBookIds([...savedBookIds, bookToSave.bookId]);
     } catch (err) {
       console.error(err);
