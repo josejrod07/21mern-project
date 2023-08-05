@@ -11,6 +11,9 @@ const SignupForm = () => {
   // State for visibility of the error alert
   const [showAlert, setShowAlert] = useState(false);
 
+  // State for form validation
+  const [validated] = useState(false);
+
   // Use the ADD_USER mutation
   const [addUser] = useMutation(ADD_USER);
 
